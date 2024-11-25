@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI城市模拟</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        
+        #configPanel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            min-width: 400px;
+        }
+
+        .config-item {
+            margin-bottom: 20px;
+        }
+
+        .config-item label {
+            display: block;
+            margin-bottom: 5px;
+            color: #4CAF50;
+        }
+
+        .config-item input, .config-item select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #333;
+            background: #2a2a2a;
+            color: #fff;
+            border-radius: 4px;
+        }
+
+        .config-item input[type="range"] {
+            width: calc(100% - 60px);
+            display: inline-block;
+        }
+
+        .config-item .value-display {
+            width: 50px;
+            display: inline-block;
+            text-align: right;
+            margin-left: 10px;
+        }
+
+        #startButton {
+            width: 100%;
+            padding: 10px;
+            background: #4CAF50;
+            border: none;
+            color: white;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        #startButton:hover {
+            background: #45a049;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #cityCanvas {
+            cursor: grab;
+            display: block;
+        }
+
+        #cityCanvas:active {
+            cursor: grabbing;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+        }
+
+        #configPanel.hidden {
+            display: none;
+        }
+
+        /* 添加测试按钮样式 */
+        .test-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .test-button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .test-button:hover {
+            background-color: #45a049;
+        }
+
+        .test-button:active {
+            background-color: #3d8b40;
+        }
+
+        .test-button.loading {
+            background-color: #666;
+            cursor: wait;
+        }
+
+        /* 添加测试结果显示区域样式 */
+        .test-results {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            border-radius: 5px;
+            padding: 10px;
+            color: white;
+            font-size: 12px;
+            display: none;
+        }
+
+        .test-results.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="configPanel">
+        <h2 style="text-align: center; margin-bottom: 20px; color: #4CAF50;">AI城市配置</h2>
+        
+        <div class="config-item">
+            <label for="agentCount">Agent数量 <span class="tooltip">影响城市人口数量</span></label>
+            <input type="range" id="agentCount" min="50" max="1000" value="200">
+            <span class="value-display">200</span>
+        </div>
+
+        <div class="config-item">
+            <label for="citySize">城市大小</label>
+            <select id="citySize">
+                <option value="small">小型 (3000x2000)</option>
+                <option value="medium" selected>中型 (4000x3000)</option>
+                <option value="large">大型 (6000x4000)</option>
+            </select>
+        </div>
+
+        <div class="config-item">
+            <label for="buildingDensity">建筑密度</label>
+            <input type="range" id="buildingDensity" min="50" max="150" value="100">
+            <span class="value-display">100%</span>
+        </div>
+
+        <div class="config-item">
+            <label for="timeSpeed">时间流速</label>
+            <input type="range" id="timeSpeed" min="0.5" max="5" step="0.5" value="1">
+            <span class="value-display">1x</span>
+        </div>
+
+        <div class="config-item">
+            <label for="weatherEnabled">天气系统</label>
+            <select id="weatherEnabled">
+                <option value="true" selected>启用</option>
+                <option value="false">禁用</option>
+            </select>
+        </div>
+
+        <div class="config-item">
+            <label for="performanceMode">性能模式</label>
+            <select id="performanceMode">
+                <option value="high">高品质</option>
+                <option value="balanced" selected>平衡</option>
+                <option value="performance">性能优先</option>
+            </select>
+        </div>
+
+        <button id="startButton">开始模拟</button>
+    </div>
+
+    <canvas id="cityCanvas"></canvas>
+
+    <!-- 添加测试控制区域 -->
+    <div class="test-controls">
+        <button id="testAIGeneration" class="test-button">测试AI城市生成</button>
+        <button id="testProfessionDistribution" class="test-button">测试职业分布</button>
+        <button id="testBuildingGeneration" class="test-button">测试建筑生成</button>
+    </div>
+
+    <!-- 添加测试结果显示区域 -->
+    <div id="testResults" class="test-results"></div>
+
+    <!-- 基础配置和工具 -->
+    <script src="config.js"></script>
+    <script src="utils.js"></script>
+
+    <!-- 核心系统 -->
+    <script src="timeSystem.js"></script>
+    <script src="weatherSystem.js"></script>
+    <script src="economicSystem.js"></script>
+    <script src="socialSystem.js"></script>
+    <script src="eventSystem.js"></script>
+
+    <!-- 建筑和路径系统 -->
+    <script src="buildingManager.js"></script>
+    <script src="buildings.js"></script>
+    <script src="road.js"></script>
+    <script src="pathSystem.js"></script>
+
+    <!-- AI和代理系统 -->
+    <script src="needsSystem.js"></script>
+    <script src="agent.js"></script>
+    <script src="aiAgent.js"></script>
+    <script src="planningSystem.js"></script>
+
+    <!-- UI和缓存系统 -->
+    <script src="uiSystem.js"></script>
+    <script src="miniMapSystem.js"></script>
+    <script src="cacheManager.js"></script>
+
+    <!-- 主城市系统 -->
+    <script src="city.js"></script>
+
+    <!-- 添加AI生成相关脚本 -->
+    <script src="ai-generation/cityPromptGenerator.js"></script>
+    <script src="ai-generation/aiCityGenerator.js"></script>
+    <script src="ai-generation/cityDataManager.js"></script>
+    <script src="ai-generation/testAIGeneration.js"></script>
+
+    <script>
+        // 配置面板交互逻辑
+        document.querySelectorAll('input[type="range"]').forEach(input => {
+            const display = input.nextElementSibling;
+            input.addEventListener('input', () => {
+                let value = input.value;
+                if (input.id === 'timeSpeed') {
+                    value += 'x';
+                } else if (input.id === 'buildingDensity') {
+                    value += '%';
+                }
+                display.textContent = value;
+            });
+        });
+
+        // 显示工具提示
+        document.querySelectorAll('label').forEach(label => {
+            const tooltip = label.querySelector('.tooltip');
+            if (tooltip) {
+                label.addEventListener('mouseover', () => {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = label.offsetWidth + 10 + 'px';
+                    tooltip.style.top = '0';
+                });
+                label.addEventListener('mouseout', () => {
+                    tooltip.style.display = 'none';
+                });
+            }
+        });
+
+        // 修改开始按钮的事件处理
+        document.getElementById('startButton').addEventListener('click', async function() {
+            const startButton = this;
+            const configPanel = document.getElementById('configPanel');
+            const canvas = document.getElementById('cityCanvas');
+            
+            try {
+                // 禁用开始按钮
+                startButton.disabled = true;
+                startButton.textContent = '正在初始化...';
+                
+                // 获取配置
+                const config = {
+                    agentCount: parseInt(document.getElementById('agentCount').value),
+                    citySize: document.getElementById('citySize').value,
+                    buildingDensity: parseInt(document.getElementById('buildingDensity').value),
+                    timeSpeed: parseFloat(document.getElementById('timeSpeed').value),
+                    weatherEnabled: document.getElementById('weatherEnabled').value === 'true',
+                    performanceMode: document.getElementById('performanceMode').value
+                };
+                
+                console.log('启动配置:', config);
+                
+                // 隐藏配置面板
+                configPanel.classList.add('hidden');
+                
+                // 显示画布
+                canvas.style.display = 'block';
+                
+                // 创建并初始化城市
+                try {
+                    window.city = new City(config);
+                    await window.city.initialize();
+                    console.log('城市初始化成功');
+                } catch (error) {
+                    throw new Error(`城市初始化失败: ${error.message}`);
+                }
+                
+                // 更新按钮状态
+                startButton.textContent = '模拟运行中';
+                
+            } catch (error) {
+                console.error('启动失败:', error);
+                alert(`启动失败: ${error.message}`);
+                
+                // 恢复配置面板
+                configPanel.classList.remove('hidden');
+                canvas.style.display = 'none';
+                
+                // 重置按钮
+                startButton.disabled = false;
+                startButton.textContent = '开始模拟';
+            }
+        });
+
+        // 添加测试按钮事件监听
+        document.getElementById('testAIGeneration').addEventListener('click', async function() {
+            try {
+                this.classList.add('loading');
+                this.disabled = true;
+                this.textContent = '测试中...';
+
+                const results = await TestAIGeneration.runTest();
+                
+                // 显示测试结果
+                const resultsDiv = document.getElementById('testResults');
+                resultsDiv.innerHTML = `
+                    <h3>测试结果</h3>
+                    <pre>${JSON.stringify(results, null, 2)}</pre>
+                `;
+                resultsDiv.classList.add('show');
+
+            } catch (error) {
+                console.error('测试失败:', error);
+                alert('测试失败，请查看控制台了解详情');
+            } finally {
+                this.classList.remove('loading');
+                this.disabled = false;
+                this.textContent = '测试AI城市生成';
+            }
+        });
+
+        document.getElementById('testProfessionDistribution').addEventListener('click', async function() {
+            try {
+                this.classList.add('loading');
+                this.disabled = true;
+                this.textContent = '测试中...';
+
+                const generator = new AICityGenerator(CONFIG.DEEPSEEK_API_KEY);
+                const distribution = await generator.testProfessionDistribution();
+                
+                // 显示测试结果
+                const resultsDiv = document.getElementById('testResults');
+                resultsDiv.innerHTML = `
+                    <h3>职业分布测试结果</h3>
+                    <pre>${JSON.stringify(distribution, null, 2)}</pre>
+                `;
+                resultsDiv.classList.add('show');
+
+            } catch (error) {
+                console.error('职业分布测试失败:', error);
+                alert('测试失败，请查看控制台了解详情');
+            } finally {
+                this.classList.remove('loading');
+                this.disabled = false;
+                this.textContent = '测试职业分布';
+            }
+        });
+
+        document.getElementById('testBuildingGeneration').addEventListener('click', async function() {
+            try {
+                this.classList.add('loading');
+                this.disabled = true;
+                this.textContent = '测试中...';
+
+                const generator = new AICityGenerator(CONFIG.DEEPSEEK_API_KEY);
+                const buildings = await generator.testBuildingGeneration();
+                
+                // 显示测试结果
+                const resultsDiv = document.getElementById('testResults');
+                resultsDiv.innerHTML = `
+                    <h3>建筑生成测试结果</h3>
+                    <pre>${JSON.stringify(buildings, null, 2)}</pre>
+                `;
+                resultsDiv.classList.add('show');
+
+            } catch (error) {
+                console.error('建筑生成测试失败:', error);
+                alert('测试失败，请查看控制台了解详情');
+            } finally {
+                this.classList.remove('loading');
+                this.disabled = false;
+                this.textContent = '测试建筑生成';
+            }
+        });
+    </script>
+</body>
+</html> 
